@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using System.Threading.Tasks;
-//using WebSocketSharp;
+using Exaroton.Internal;
 using Newtonsoft.Json;
 using Exaroton;
 using Newtonsoft.Json.Linq;
 
-namespace Exaroton.Internal
+namespace Exaroton
 {
 
 
-    public class WebSocketAPIClient
+    public class ExarotonWebsocketClient
     {
         private string[] _streamNames = new string[] { StreamNames.StatusStream, StreamNames.ConsoleStream, StreamNames.TickStream, StreamNames.StatsStream, StreamNames.HeapStream };
         private string GetStreamName(StreamType t)
@@ -23,23 +23,38 @@ namespace Exaroton.Internal
 
         private Client _client;
         private bool HasStarted = false;
+        private int consoleLinesRequest = 0;
 
 
+        private async Task<bool> WaitUntil(Func<bool> condition, int msFrequency = 50, int sTimeout = 15)
+        {
+            var t = Task.Run(async () => {
+               while(!condition()) await Task.Delay(msFrequency); 
+            });
+
+            return t == await Task.WhenAny(t, Task.Delay(sTimeout * 1000));
+        }
 
 
         public async Task Start()
         {
-            // thank you stackoverflow
-            //_client.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12;
-            //_client.SetCredentials(,)
-            //_client.Protocol
             await _client.Connect();
+
+            var started = await WaitUntil(() => HasStarted, 50, 10);
+            if(!started) throw new Exception("Couldn't start websocket client.");
         }
 
         public async Task Stop()
         {
             await _client.Stop();
             HasStarted = false;
+        }
+
+        public void SetConsoleLines(int i)
+        {
+            if(i < 0 || i > 500) throw new ArgumentException();
+
+            consoleLinesRequest = i;
         }
 
 
@@ -54,58 +69,68 @@ namespace Exaroton.Internal
         }
 
 
-        private void Send(WebSocketMessage msg)
+        private async Task Send(WebSocketMessage msg)
         {
-            if(!HasStarted) throw new Exception();
+            if(!HasStarted) await Start();
 
             var str = msg.Serialize();
-            //Program.Logs += str + "\n";
 
             _client.Send(str);
         }
 
-        private void SendToStreamUnsafe(StreamInfo stream, string type, object obj)
+        private async Task SendToStream(StreamType stream, WebSocketMessage msg)
         {
-            var msg = WebSocketMessage.Create(type, stream.StreamName, obj);
-            
-            Send(msg);
+            await SendToStream(GetStreamName(stream), msg);
         }
 
-        public void StartStream(StreamType stream, int consoleLines = 0)
+        private async Task SendToStream(string stream, WebSocketMessage msg)
         {
-            StartStream(GetStreamName(stream), consoleLines);
-        }
-        public void StopStream(StreamType stream)
-        {
-            StopStream(GetStreamName(stream));
+            if(!Streams[stream].IsRunning) await StartStream(stream);
+
+            await Send(msg);
         }
 
-        private void StartStream(string stream, int consoleLines = 0)
+        public async Task StartStream(StreamType stream)
         {
-            if(consoleLines < 0 || consoleLines > 500) throw new ArgumentOutOfRangeException();
+            await StartStream(GetStreamName(stream));
+        }
+        public async Task StopStream(StreamType stream)
+        {
+            await StopStream(GetStreamName(stream));
+        }
 
+        private async Task StartStream(string stream)
+        {
             object? obj = null;
-            if(stream == StreamNames.ConsoleStream) obj = new ConsoleArg(consoleLines);
+            if(stream == StreamNames.ConsoleStream) obj = new ConsoleArg(consoleLinesRequest);
             var msg = Streams[stream].GetSubscriptionMessage(obj);
             
+            await Send(msg);
 
-            Send(msg);
+            var started = await WaitUntil(() => Streams[stream].IsRunning);
+
+            if(!started) throw new Exception("Couldn't start the stream");
         }
-        private void StopStream(string stream)
+        private async Task StopStream(string stream)
         {
             var msg = Streams[stream].GetUnsubscriptionMessage();
 
-            Send(msg);
+            await Send(msg);
 
             Streams[stream].IsRunning = false;
+        }
+
+        public async Task SendCommandToConsoleStream(string command)
+        {
+            var msg = WebSocketMessage.Create("command", StreamNames.ConsoleStream, command);
+            
+            await SendToStream(StreamType.Console, msg);
         }
 
 
         public event Action OnConnectionEstablished = () => {};
         // public event Action OnServerConnected = () => {};
         // public event Action<string> OnServerDisconnected = (reason) => {}; 
-
-
 
         public event EventHandler<StreamEventArgs<Server>> OnMessage_StatusStream = (s, e) => {};
         public event EventHandler<StreamEventArgs<string>> OnMessage_ConsoleStream = (s, e) => {};
@@ -158,41 +183,6 @@ namespace Exaroton.Internal
         }
 
 
-        public void SendCommandToConsoleStream(string command)
-        {
-            var msg = WebSocketMessage.Create("command", StreamNames.ConsoleStream, command);
-            if(!Streams[StreamNames.ConsoleStream].IsRunning) throw new Exception();
-
-            Send(msg);
-        }
-
-        
-
-        public WebSocketAPIClient(string server, string token)
-        {
-             _client = new Client(server, token);//GetWebSocketAPIUrl(server));
-             //_client.
-             //Console.WriteLine(string.Join(" ", _client.Credentials.Roles));
-            // _client.CustomHeaders = new Dictionary<string, string>
-            // {
-            //     { "Authorization", $"Bearer {token}" }
-            // };
-            _client.OnMessage += OnMessage;
-            //_client.SetCredentials()
-
-            // StatusStream = new Stream<Server>(StreamNames.StatsStream);
-            // ConsoleStream = new Stream<string>(StreamNames.ConsoleStream);
-            // TickStream = new Stream<TickInfo>(StreamNames.TickStream);
-            // StatsStream = new Stream<ServerStats>(StreamNames.StatsStream);
-            // HeapStream = new Stream<HeapMemoryUsage>(StreamNames.HeapStream);
-
-            Streams.Add(StreamNames.StatusStream, new StreamInfo(StreamNames.StatusStream));
-            Streams[StreamNames.StatusStream].IsRunning = true;
-            Streams.Add(StreamNames.ConsoleStream, new StreamInfo(StreamNames.ConsoleStream));
-            Streams.Add(StreamNames.TickStream, new StreamInfo(StreamNames.TickStream));
-            Streams.Add(StreamNames.StatsStream, new StreamInfo(StreamNames.StatsStream));
-            Streams.Add(StreamNames.HeapStream, new StreamInfo(StreamNames.HeapStream));
-        }
 
         private void OnMessage(string str)
         {
@@ -224,5 +214,21 @@ namespace Exaroton.Internal
                 if(msg.Stream == StreamNames.HeapStream) ReceivedHeapMessage(msg);
             }
         }
+        
+
+        public ExarotonWebsocketClient(string server, string token)
+        {
+             _client = new Client(server, token);
+            _client.OnMessage += OnMessage;
+
+            Streams.Add(StreamNames.StatusStream, new StreamInfo(StreamNames.StatusStream));
+            Streams[StreamNames.StatusStream].IsRunning = true;
+            Streams.Add(StreamNames.ConsoleStream, new StreamInfo(StreamNames.ConsoleStream));
+            Streams.Add(StreamNames.TickStream, new StreamInfo(StreamNames.TickStream));
+            Streams.Add(StreamNames.StatsStream, new StreamInfo(StreamNames.StatsStream));
+            Streams.Add(StreamNames.HeapStream, new StreamInfo(StreamNames.HeapStream));
+        }
+
+        
     }
 }

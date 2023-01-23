@@ -20,36 +20,39 @@ namespace Exaroton
 
 
             // HTTP API
-            await Exaroton.LoginAsync(token);
+            ExarotonClient client = new ExarotonClient(token);
+            await client.LoginAsync();
 
-            var server = await Server.GetServerAsync("cRrm2IIXvY06BqPX");
             var account = await Account.GetAccount();
-            //await server.StartServerAsync();
 
-            var response = server.Status.ToString();
+            var servers = await account.GetServers();
+            var server = servers[0];
 
-            Console.WriteLine(response);
+            Console.WriteLine(server.Name);
+
             //return;
 
 
 
 
             // Websocket API
-            Exaroton.CreateWebSocketAPIClient(serverid, token); // just for showcase
-            var cl = Exaroton.GetWebSocketAPIClient(serverid);
-
-            cl.OnMessage_ConsoleStream += (sender, e) =>
+            var wsc = client.CreateWebsocketClient(serverid);
+            wsc.SetConsoleLines(500);
+            wsc.OnMessage_ConsoleStream += (sender, e) =>
             {
                 Console.WriteLine(e.Value);
             };
 
-            await cl.Start();
+            // await wsc.Start();
+            await wsc.StartStream(StreamType.Console); // child-proof starting the socket
 
-            await Task.Delay(500);
-            // possibly implement some message queue
-            cl.StartStream(StreamType.Console, 500);
+            while(true)
+            {
+                string text = Console.ReadLine() ?? "";
+                if(text == "") continue;
 
-            await Task.Delay(-1);
+                await wsc.SendCommandToConsoleStream(text); // maybe create response finder, but im not sure, if minecraft organizes them properly
+            }
         }
     }
 }

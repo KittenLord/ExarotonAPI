@@ -16,11 +16,13 @@ namespace Exaroton
     }
 
     
-    public static class Exaroton
+    public class ExarotonClient
     {
-        public static async Task<bool> LoginAsync(string token)
+        public string Token { get; init; }
+
+        public async Task<bool> LoginAsync()
         {
-            APIClient.SetToken(token);
+            APIClient.SetToken(Token);
 
             try
             {
@@ -34,23 +36,27 @@ namespace Exaroton
             return true;
         }
 
-        private static Dictionary<string, WebSocketAPIClient> _websockets = new Dictionary<string, WebSocketAPIClient>();
+        private Dictionary<string, ExarotonWebsocketClient> _websockets = new Dictionary<string, ExarotonWebsocketClient>();
 
-        public static WebSocketAPIClient CreateWebSocketAPIClient(string ServerID, string Token)
+        public ExarotonWebsocketClient CreateWebsocketClient(string ServerID)
         {
-            if(_websockets.ContainsKey(ServerID)) throw new Exception();
-            var ws = new WebSocketAPIClient(ServerID, Token);
+            if(_websockets.ContainsKey(ServerID)) throw new Exception("Websocket client has been already created for this server!");
+            var ws = new ExarotonWebsocketClient(ServerID, Token);
             
             _websockets.Add(ServerID, ws);
-
             return ws;
         }
 
-        public static WebSocketAPIClient GetWebSocketAPIClient(string ServerID)
+        public ExarotonWebsocketClient GetWebsocketClient(string ServerID)
         {
-            if(!_websockets.ContainsKey(ServerID)) throw new Exception();
+            if(!_websockets.ContainsKey(ServerID)) throw new Exception("There is no websocket client created for this server!");
 
             return _websockets[ServerID];
+        }
+
+        public ExarotonClient(string token)
+        {
+            Token = token;
         }
     }
 }
