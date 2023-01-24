@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using Newtonsoft.Json;
 using Exaroton.Internal;
+using Exaroton.Cast;
 
 namespace Exaroton
 {
@@ -29,7 +30,7 @@ namespace Exaroton
         [JsonProperty("host")] public string? Host { get; private set; }
         [JsonProperty("port")] public int? Port { get; private set; }
         [JsonProperty("software")] public ServerSoftware Software { get; private set; }
-        [JsonProperty("players")] public PlayerList Players { get; private set; }
+        [JsonProperty("players")] public PlayerList PlayersList { get; private set; }
         [JsonProperty("shared")] public bool Shared { get; private set; }
         
 
@@ -43,7 +44,8 @@ namespace Exaroton
                 return Host + ":" + Port.ToString();
             }
         }
-
+        [JsonIgnore] public List<string> PlayerUsernames => PlayersList.Players;
+        [JsonIgnore] public List<MinecraftPlayer> Players => PlayerUsernames.Select(p => new MinecraftPlayer(p, ServerID)).ToList();
 
         public static async Task<Server> GetServerAsync(string serverID)
         {
@@ -58,6 +60,8 @@ namespace Exaroton
             return await GetServerAsync(this.ServerID);
         }
         
+        #region Commands
+
         public async Task<string> ExecuteCommandAsync(string command)
         {
             StringCommand c = new StringCommand(command);
@@ -68,12 +72,50 @@ namespace Exaroton
             return response.BuildData<string>();
         }
 
+        public async Task<T> ExecuteDataCommandAsync<T>(string command)
+        {
+            var data = await ExecuteCommandAsync(command);
+            var type = typeof(T);
+
+            if(type == typeof(double) || type == typeof(float) || type == typeof(decimal))
+            {
+                return (T)((object)data.DataToDouble());
+            }
+            if(type == typeof(bool))
+            {
+                return (T)((object)data.DataToBool());
+            }
+            if(type == typeof(int)) // possibly add more types (though im worried about conversions, i.e. packing an int into a uint)
+            {
+                return (T)((object)data.DataToInt());
+            }
+            if(type == typeof(short))
+            {
+                return (T)((object)data.DataToShort());
+            }
+            if(type == typeof(string))
+            {
+                return (T)((object)data.DataToString());
+            }
+            
+            throw new Exception($"Type {type} is not supported.");
+        }
+
+        public async Task<T> ExecuteDataCommandAsync<T>(string command, Func<string, T> converter)
+        {
+            string data = await ExecuteDataCommandAsync<string>(command);
+
+            T result = converter(data);
+
+            return result;
+        }
+
         public async Task<string> ExecuteCommandAsync(IMinecraftCommand command)
         {
             return await ExecuteCommandAsync(command.Build());
         }
 
-
+        #endregion Commands
 
         #region Logs
         public async Task<string> GetLogs()
@@ -312,7 +354,7 @@ namespace Exaroton
             Host = host;
             Port = port;
             Software = software;
-            Players = players;
+            PlayersList = players;
             Shared = shared;
         }
     }

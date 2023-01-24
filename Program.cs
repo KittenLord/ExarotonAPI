@@ -29,6 +29,7 @@ namespace Exaroton
             var server = servers[0];
 
             Console.WriteLine(server.Name);
+            Console.WriteLine(server.Status);
 
             //return;
 
