@@ -8,3 +8,4 @@ To do:
 5. Make ExarotonWebsocketClient class prettier
 6. Make documentation
 7. Add disconnect invalid-status/connect handling
+8. Maybe add logger?
