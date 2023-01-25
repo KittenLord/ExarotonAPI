@@ -11,21 +11,26 @@ namespace Exaroton
         public string Name { get; init; }
         public string ServerID { get; init; }
 
-        private async Task<T> GetPlayerData<T>(string command)
+        private Func<Server>? Server { get; init; }
+
+        private async Task<T> GetPlayerData<T>(string command, string wantedContent)
         {
-            var server = await Server.GetServerAsync(ServerID);
+            if(Server is null) throw new Exception();
+
+            var server = Server();
+            if(server is null) throw new Exception();
             if(!server.PlayersList.Players.Contains(Name)) throw new Exception();
 
-            var value = await server.ExecuteDataCommandAsync<T>(command);
+            var value = await server.ExecuteDataCommandAsync<T>(command, wantedContent);
 
             return value;
         }
         
         public async Task<Vector3> GetCoordinatesAsync()
         {
-            var x = await GetPlayerData<float>($"data get entity {Name} Pos[0]");
-            var y = await GetPlayerData<float>($"data get entity {Name} Pos[1]");
-            var z = await GetPlayerData<float>($"data get entity {Name} Pos[2]");
+            var x = (float)await GetPlayerData<double>($"data get entity {Name} Pos[0]", $"{Name} has the following entity data: ");
+            var y = (float)await GetPlayerData<double>($"data get entity {Name} Pos[1]", $"{Name} has the following entity data: ");
+            var z = (float)await GetPlayerData<double>($"data get entity {Name} Pos[2]", $"{Name} has the following entity data: ");
 
             return new Vector3(x, y, z);
         }
@@ -34,6 +39,13 @@ namespace Exaroton
         {
             Name = name;
             ServerID = serverID;
+            Server = null;
+        }
+        internal MinecraftPlayer(string name, string serverID, Func<Server> getServer)
+        {
+            Name = name;
+            ServerID = serverID;
+            Server = getServer;
         }
     }
 }

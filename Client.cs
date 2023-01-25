@@ -71,7 +71,6 @@ namespace Exaroton.Internal
             _client = new ClientWebSocket();
             Url = string.Format(webSocketAPIUrl, server);
             _client.Options.SetRequestHeader("Authorization", $"Bearer {token}");
-            //_client.
         }
     }
 }

@@ -7,9 +7,21 @@ using Exaroton.Internal;
 using Newtonsoft.Json;
 using Exaroton;
 using Newtonsoft.Json.Linq;
+using System.Text.RegularExpressions;
 
 namespace Exaroton
 {
+    public class StreamEventArgs<T> : EventArgs
+    {
+        public T? Value { get; private set; }
+        public T? PreviousValue { get; private set; }
+
+        public StreamEventArgs(T? value, T?previousValue)
+        {
+            Value = value;
+            PreviousValue = previousValue;
+        }
+    }
 
 
     public class ExarotonWebsocketClient
@@ -22,7 +34,7 @@ namespace Exaroton
 
 
         private Client _client;
-        private bool HasStarted = false;
+        public bool IsRunning { get; private set; } = false;
         private int consoleLinesRequest = 0;
 
 
@@ -40,14 +52,14 @@ namespace Exaroton
         {
             await _client.Connect();
 
-            var started = await WaitUntil(() => HasStarted, 50, 10);
+            var started = await WaitUntil(() => IsRunning, 50, 10);
             if(!started) throw new Exception("Couldn't start websocket client.");
         }
 
         public async Task Stop()
         {
             await _client.Stop();
-            HasStarted = false;
+            IsRunning = false;
         }
 
         public void SetConsoleLines(int i)
@@ -71,7 +83,7 @@ namespace Exaroton
 
         private async Task Send(WebSocketMessage msg)
         {
-            if(!HasStarted) await Start();
+            if(!IsRunning) await Start();
 
             var str = msg.Serialize();
 
@@ -98,6 +110,10 @@ namespace Exaroton
         {
             await StopStream(GetStreamName(stream));
         }
+        public bool IsStreamRunning(StreamType stream)
+        {
+            return Streams[GetStreamName(stream)].IsRunning;
+        }
 
         private async Task StartStream(string stream)
         {
@@ -120,12 +136,21 @@ namespace Exaroton
             Streams[stream].IsRunning = false;
         }
 
-        public async Task SendCommandToConsoleStream(string command)
+        public async Task<string> SendCommandToConsoleStream(string command, string wantedContent = "")
         {
             var msg = WebSocketMessage.Create("command", StreamNames.ConsoleStream, command);
             
             await SendToStream(StreamType.Console, msg);
+
+            lastConsoleOutput = "";
+            while(!lastConsoleOutput.Contains(wantedContent) || lastConsoleOutput == "") await Task.Delay(2);
+
+            var l = lastConsoleOutput;
+            lastConsoleOutput = "";
+            return l;
         }
+
+        private string lastConsoleOutput = "";
 
 
         public event Action OnConnectionEstablished = () => {};
@@ -193,7 +218,7 @@ namespace Exaroton
 
             if(msg.Type == "ready")
             {
-                HasStarted = true;
+                IsRunning = true;
                 OnConnectionEstablished.Invoke();
             }
 
@@ -214,6 +239,16 @@ namespace Exaroton
                 if(msg.Stream == StreamNames.HeapStream) ReceivedHeapMessage(msg);
             }
         }
+
+        // Studying console output makes me think that all messages coming from Exaroton fit in this regex
+        Regex IsValidMessage = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[minecraft\/DedicatedServer\]: .*");
+        Regex IsUserSent = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[minecraft\/DedicatedServer\]: <.*>");
+        Regex IsAdminSent = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[minecraft\/DedicatedServer\]: \[.*\]");
+
+        private bool IsConsoleResponseAuthentic(string response)
+        {
+            return IsValidMessage.IsMatch(response) && !IsUserSent.IsMatch(response) && !IsAdminSent.IsMatch(response);
+        }
         
 
         public ExarotonWebsocketClient(string server, string token)
@@ -223,12 +258,16 @@ namespace Exaroton
 
             Streams.Add(StreamNames.StatusStream, new StreamInfo(StreamNames.StatusStream));
             Streams[StreamNames.StatusStream].IsRunning = true;
+
             Streams.Add(StreamNames.ConsoleStream, new StreamInfo(StreamNames.ConsoleStream));
             Streams.Add(StreamNames.TickStream, new StreamInfo(StreamNames.TickStream));
             Streams.Add(StreamNames.StatsStream, new StreamInfo(StreamNames.StatsStream));
             Streams.Add(StreamNames.HeapStream, new StreamInfo(StreamNames.HeapStream));
-        }
 
-        
+            OnMessage_ConsoleStream += (s, e) => {
+                if(IsConsoleResponseAuthentic(e.Value ?? ""))
+                    lastConsoleOutput = e.Value ?? "";
+            };
+        }
     }
 }

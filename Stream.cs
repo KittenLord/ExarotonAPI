@@ -9,19 +9,8 @@ using Newtonsoft.Json.Linq;
 
 namespace Exaroton.Internal
 {
-    public class StreamEventArgs<T> : EventArgs
-    {
-        public T? Value { get; private set; }
-        public T? PreviousValue { get; private set; }
 
-        public StreamEventArgs(T? value, T?previousValue)
-        {
-            Value = value;
-            PreviousValue = previousValue;
-        }
-    }
-
-    public class WebSocketMessage
+    internal class WebSocketMessage
     {
         [JsonProperty("type")] public string Type { get; private set; }
         [JsonProperty("stream")] public string Stream { get; private set; }
@@ -125,7 +114,7 @@ namespace Exaroton.Internal
         }
     }
 
-    public class StreamInfo
+    internal class StreamInfo
     {
         public string StreamName { get; private set; }
         public bool IsRunning { get; set; } = false;
@@ -139,11 +128,11 @@ namespace Exaroton.Internal
         public const string SuccessType = "started";
 
 
-        public WebSocketMessage GetSubscriptionMessage(object? arg = null) => WebSocketMessage.Create(SubscribeType, StreamName, arg ?? "");
-        public WebSocketMessage GetUnsubscriptionMessage() => WebSocketMessage.Create(UnsubscribeType, StreamName, "");
-        public WebSocketMessage GetSuccessfulSubscriptionMessage() => WebSocketMessage.Create(SuccessType, StreamName, "");
+        internal WebSocketMessage GetSubscriptionMessage(object? arg = null) => WebSocketMessage.Create(SubscribeType, StreamName, arg ?? "");
+        internal WebSocketMessage GetUnsubscriptionMessage() => WebSocketMessage.Create(UnsubscribeType, StreamName, "");
+        internal WebSocketMessage GetSuccessfulSubscriptionMessage() => WebSocketMessage.Create(SuccessType, StreamName, "");
 
-        public StreamInfo(string streamName)
+        internal StreamInfo(string streamName)
         {
             StreamName = streamName;
         }

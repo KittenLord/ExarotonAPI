@@ -16,20 +16,11 @@ namespace Exaroton
             // lmfao
             JToken token = JToken.Load(reader);
             return token.ToString();
-            // if (token.Type == JTokenType.Object || token.Type == JTokenType.Array || token.Type == JTokenType.Null || token.Type == JTokenType.Undefined)
-            // {
-            //     return token.ToString();
-            // }
-            // return null;
         }
 
         public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
-            // //serializer.Serialize(writer, value);
-
-            // //serialize as actual JSON and not string data
-            // var token = JToken.Parse(value.ToString());
-            // writer.WriteToken(token.CreateReader());
+            throw new NotImplementedException();
         }
     }
 }

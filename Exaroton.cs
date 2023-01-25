@@ -38,13 +38,18 @@ namespace Exaroton
 
         private Dictionary<string, ExarotonWebsocketClient> _websockets = new Dictionary<string, ExarotonWebsocketClient>();
 
-        public ExarotonWebsocketClient CreateWebsocketClient(string ServerID)
+        public ExarotonWebsocketClient AddWebsocketClient(string ServerID)
         {
             if(_websockets.ContainsKey(ServerID)) throw new Exception("Websocket client has been already created for this server!");
             var ws = new ExarotonWebsocketClient(ServerID, Token);
             
             _websockets.Add(ServerID, ws);
             return ws;
+        }
+
+        public ExarotonWebsocketClient CreateWebsocketClient(string ServerID)
+        {
+            return new ExarotonWebsocketClient(ServerID, Token);
         }
 
         public ExarotonWebsocketClient GetWebsocketClient(string ServerID)

@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 namespace Exaroton.Internal
 {
     
-    internal class APIClient
+    internal class APIClient // possibly make this not static? it will be difficult to manage tho
     {
         private static HttpClient _client = new HttpClient();
         private static string _token { get; set; } = "";

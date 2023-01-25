@@ -32,6 +32,32 @@ namespace Exaroton
         [JsonProperty("software")] public ServerSoftware Software { get; private set; }
         [JsonProperty("players")] public PlayerList PlayersList { get; private set; }
         [JsonProperty("shared")] public bool Shared { get; private set; }
+
+
+        #region Internal Websocket
+        [JsonIgnore] private ExarotonWebsocketClient? Client { get; set; } = null;
+        public void SetWebsocketClient(ExarotonClient client)
+        {
+            SetWebsocketClient(client.CreateWebsocketClient(ServerID));
+        }
+
+        private void SetWebsocketClient(ExarotonWebsocketClient client)
+        {
+            Client = client;
+            SetupWebsocketClient();
+        }
+
+        private async void SetupWebsocketClient()
+        {
+            if(Client is null) throw new Exception();
+            Client.SetConsoleLines(500);
+
+            await Client.Start();
+
+            if(!Client.IsStreamRunning(StreamType.Console))
+                await Client.StartStream(StreamType.Console);
+        }
+        #endregion Internal Websocket
         
 
         [JsonIgnore] public bool IsOnline => Status == ServerStatus.Online;
@@ -45,7 +71,7 @@ namespace Exaroton
             }
         }
         [JsonIgnore] public List<string> PlayerUsernames => PlayersList.Players;
-        [JsonIgnore] public List<MinecraftPlayer> Players => PlayerUsernames.Select(p => new MinecraftPlayer(p, ServerID)).ToList();
+        [JsonIgnore] public List<MinecraftPlayer> Players => PlayerUsernames.Select(p => new MinecraftPlayer(p, ServerID, () => this)).ToList();
 
         public static async Task<Server> GetServerAsync(string serverID)
         {
@@ -55,64 +81,53 @@ namespace Exaroton
 
             return server;
         }
-        public async Task<Server> GetUpdate()
+        public async Task<Server> GetUpdateAsync()
         {
-            return await GetServerAsync(this.ServerID);
+            var update = await GetServerAsync(this.ServerID);
+            update.Client = Client;
+            return update;
         }
         
         #region Commands
 
-        public async Task<string> ExecuteCommandAsync(string command)
+        public async Task ExecuteCommandAsync(string command)
         {
             StringCommand c = new StringCommand(command);
             var json = JsonConvert.SerializeObject(c);
 
-            var response = await APIClient.PostRequestAsync($"https://api.exaroton.com/v1/servers/{ServerID}/command/", json);
-
-            return response.BuildData<string>();
+            await APIClient.PostRequestAsync($"https://api.exaroton.com/v1/servers/{ServerID}/command/", json);
         }
 
-        public async Task<T> ExecuteDataCommandAsync<T>(string command)
+        public async Task<string> ExecuteCommandWithResponseAsync(string command, string expectedContent = "")
         {
-            var data = await ExecuteCommandAsync(command);
-            var type = typeof(T);
+            if(Client is null) throw new Exception("Cannot await for response without a Websocket client initialized.");
+            if(!Client.IsRunning) throw new Exception("Cannot await for response without a Websocket client running.");
+            if(!Client.IsStreamRunning(StreamType.Console)) throw new Exception("Cannot await for response without the Console stream running.");
 
-            if(type == typeof(double) || type == typeof(float) || type == typeof(decimal))
-            {
-                return (T)((object)data.DataToDouble());
-            }
-            if(type == typeof(bool))
-            {
-                return (T)((object)data.DataToBool());
-            }
-            if(type == typeof(int)) // possibly add more types (though im worried about conversions, i.e. packing an int into a uint)
-            {
-                return (T)((object)data.DataToInt());
-            }
-            if(type == typeof(short))
-            {
-                return (T)((object)data.DataToShort());
-            }
-            if(type == typeof(string))
-            {
-                return (T)((object)data.DataToString());
-            }
-            
-            throw new Exception($"Type {type} is not supported.");
+            var data = await Client.SendCommandToConsoleStream(command, expectedContent);
+
+            return data;
+        }
+        
+        public async Task<T> ExecuteDataCommandAsync<T>(string command, string expectedContent = "")
+        {
+            var data = await ExecuteCommandWithResponseAsync(command, expectedContent);
+
+            return data.ConvertData<T>();
         }
 
-        public async Task<T> ExecuteDataCommandAsync<T>(string command, Func<string, T> converter)
+        public async Task<T> ExecuteDataCommandAsync<T>(string command, Func<string, T> converter, string wantedContent = "")
         {
-            string data = await ExecuteDataCommandAsync<string>(command);
+            string data = await ExecuteDataCommandAsync<string>(command, wantedContent);
 
             T result = converter(data);
 
             return result;
         }
 
-        public async Task<string> ExecuteCommandAsync(IMinecraftCommand command)
+        public async Task ExecuteCommandAsync(IMinecraftCommand command)
         {
-            return await ExecuteCommandAsync(command.Build());
+            await ExecuteCommandAsync(command.Build());
         }
 
         #endregion Commands
@@ -283,6 +298,17 @@ namespace Exaroton
             return response.IsSuccess;
         }
 
+        public async Task<List<string>> GetPlayersUsernamesAsync()
+        {
+            var s = await GetUpdateAsync();
+            return s.PlayerUsernames;
+        }
+
+        public async Task<List<MinecraftPlayer>> GetPlayersAsync()
+        {
+            var s = await GetUpdateAsync();
+            return s.Players;
+        }
 
         
 
@@ -296,6 +322,7 @@ namespace Exaroton
 
             return (PlayerListType)listNames.ToList().IndexOf(name);
         }
+        
         #endregion Player lists
 
         #region Files
