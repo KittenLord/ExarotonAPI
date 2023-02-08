@@ -53,7 +53,7 @@ namespace Exaroton
             return await Client.StartStream(StreamType.Console, 1);
         }
 
-        [JsonIgnore] public bool CanExecuteCommands => Client.CanSendConsoleMessages;
+        [JsonIgnore] public bool CanExecuteCommands => Client is not null && Client.CanSendConsoleMessages;
 
         #endregion Internal Websocket
         
