@@ -398,14 +398,14 @@ namespace Exaroton
     {
         [JsonProperty("id")] public string Id { get; private set; }
         [JsonProperty("name")] public string Name { get; private set; }
-        [JsonProperty("version")] public string Verstion { get; private set; }
+        [JsonProperty("version")] public string Version { get; private set; }
 
         [JsonConstructor]
-        private ServerSoftware(string id, string name, string verstion)
+        private ServerSoftware(string id, string name, string version)
         {
             Id = id;
             Name = name;
-            Verstion = verstion;
+            Version = version;
         }
     }
 

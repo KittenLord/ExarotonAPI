@@ -14,9 +14,9 @@ namespace Exaroton.Internal
         private string Url { get; init; }
         public bool IsRunning { get; private set; }
 
-        public async Task Connect()
+        public async Task ConnectAsync()
         {
-            await _client.ConnectAsync(new Uri(Url), new CancellationToken());
+            await _client.ConnectAsync(new Uri(Url), CancellationToken.None);
             IsRunning = true;
             Loop();
         }
@@ -24,7 +24,7 @@ namespace Exaroton.Internal
         public void Send(string msg)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(msg);
-            _client.SendAsync(bytes, WebSocketMessageType.Text, true, new CancellationToken());
+            _client.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
         public async Task Stop()

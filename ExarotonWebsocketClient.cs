@@ -50,7 +50,7 @@ namespace Exaroton
 
         public async Task Start()
         {
-            await _client.Connect();
+            await _client.ConnectAsync();
 
             var started = await WaitUntil(() => IsRunning, 50, 10);
             if(!started) throw new Exception("Couldn't start websocket client.");
@@ -102,9 +102,9 @@ namespace Exaroton
             await Send(msg);
         }
 
-        public async Task StartStream(StreamType stream)
+        public async Task<bool> StartStream(StreamType stream)
         {
-            await StartStream(GetStreamName(stream));
+            return await StartStream(GetStreamName(stream));
         }
         public async Task StopStream(StreamType stream)
         {
@@ -115,7 +115,7 @@ namespace Exaroton
             return Streams[GetStreamName(stream)].IsRunning;
         }
 
-        private async Task StartStream(string stream)
+        private async Task<bool> StartStream(string stream)
         {
             object? obj = null;
             if(stream == StreamNames.ConsoleStream) obj = new ConsoleArg(consoleLinesRequest);
@@ -125,7 +125,8 @@ namespace Exaroton
 
             var started = await WaitUntil(() => Streams[stream].IsRunning);
 
-            if(!started) throw new Exception("Couldn't start the stream");
+            //if(!started) throw new Exception("Couldn't start the stream");
+            return started;
         }
         private async Task StopStream(string stream)
         {
@@ -211,10 +212,14 @@ namespace Exaroton
 
         private void OnMessage(string str)
         {
-            //Program.Logs += str + "\n";
+            if(str == "" && !IsRunning)
+            {
+                throw new Exception("Couldn't start websocket client. You are probably using wrong token/server id.");
+            }
+
             var msg = JsonConvert.DeserializeObject<WebSocketMessage>(str, new JsonConverterObjectToString());
 
-            if(msg is null) throw new Exception();
+            if(msg is null) return;
 
             if(msg.Type == "ready")
             {
