@@ -41,22 +41,20 @@ namespace Exaroton
             SetWebsocketClient(client.CreateWebsocketClient(ServerID));
         }
 
-        private void SetWebsocketClient(ExarotonWebsocketClient client)
+        public void SetWebsocketClient(ExarotonWebsocketClient client)
         {
             Client = client;
-            SetupWebsocketClient();
-        }
-
-        private async void SetupWebsocketClient()
-        {
-            if(Client is null) throw new Exception();
             Client.SetConsoleLines(500);
-
-            await Client.Start();
-
-            if(!Client.IsStreamRunning(StreamType.Console))
-                await Client.StartStream(StreamType.Console);
         }
+
+        public async Task<bool> TryStartConsoleStream()
+        {
+            if(Client is null) throw new Exception("Websocket Client is null");
+            return await Client.StartStream(StreamType.Console, 1);
+        }
+
+        [JsonIgnore] public bool CanExecuteCommands => Client.CanSendConsoleMessages;
+
         #endregion Internal Websocket
         
 
@@ -100,9 +98,12 @@ namespace Exaroton
 
         public async Task<string> ExecuteCommandWithResponseAsync(string command, string expectedContent = "")
         {
-            if(Client is null) throw new Exception("Cannot await for response without a Websocket client initialized.");
-            if(!Client.IsRunning) throw new Exception("Cannot await for response without a Websocket client running.");
-            if(!Client.IsStreamRunning(StreamType.Console)) throw new Exception("Cannot await for response without the Console stream running.");
+            if(Client is null) throw new Exception("Websocket Client is null.");
+            if(!Client.CanSendConsoleMessages)
+            {
+                var started = await TryStartConsoleStream();
+                if(!started) return "";
+            }
 
             var data = await Client.SendCommandToConsoleStream(command, expectedContent);
 

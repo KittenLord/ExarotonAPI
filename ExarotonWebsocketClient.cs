@@ -11,6 +11,16 @@ using System.Text.RegularExpressions;
 
 namespace Exaroton
 {
+    [Flags]
+    public enum LogSeverity
+    {
+        Info = 1,
+        Error = 2,
+        Default = 3,
+        Message = 4,
+        All = 7
+    }
+
     public class StreamEventArgs<T> : EventArgs
     {
         public T? Value { get; private set; }
@@ -33,8 +43,10 @@ namespace Exaroton
         }
 
 
+        public LogSeverity LogSeverity = LogSeverity.Default;
         private Client _client;
         public bool IsRunning { get; private set; } = false;
+        public bool CanSendConsoleMessages => IsRunning && IsStreamRunning(StreamType.Console);
         private int consoleLinesRequest = 0;
 
 
@@ -53,7 +65,8 @@ namespace Exaroton
             await _client.ConnectAsync();
 
             var started = await WaitUntil(() => IsRunning, 50, 10);
-            if(!started) throw new Exception("Couldn't start websocket client.");
+            if(!started) Log("Couldn't start the websocket", LogSeverity.Error);
+            else Log("Started the websocket", LogSeverity.Info);
         }
 
         public async Task Stop()
@@ -102,9 +115,9 @@ namespace Exaroton
             await Send(msg);
         }
 
-        public async Task<bool> StartStream(StreamType stream)
+        public async Task<bool> StartStream(StreamType stream, int timeout = 15)
         {
-            return await StartStream(GetStreamName(stream));
+            return await StartStream(GetStreamName(stream), timeout);
         }
         public async Task StopStream(StreamType stream)
         {
@@ -115,7 +128,7 @@ namespace Exaroton
             return Streams[GetStreamName(stream)].IsRunning;
         }
 
-        private async Task<bool> StartStream(string stream)
+        private async Task<bool> StartStream(string stream, int timeout = 15)
         {
             object? obj = null;
             if(stream == StreamNames.ConsoleStream) obj = new ConsoleArg(consoleLinesRequest);
@@ -123,7 +136,9 @@ namespace Exaroton
             
             await Send(msg);
 
-            var started = await WaitUntil(() => Streams[stream].IsRunning);
+            var started = await WaitUntil(() => Streams[stream].IsRunning, sTimeout: timeout);
+            if(!started) Log("Couldn't start the stream", LogSeverity.Error);
+            else Log("Started the " + stream + " stream", LogSeverity.Info);
 
             //if(!started) throw new Exception("Couldn't start the stream");
             return started;
@@ -155,6 +170,16 @@ namespace Exaroton
 
 
         public event Action OnConnectionEstablished = () => {};
+        public event Action<string> OnLog = (s) => {};
+
+        private void Log(string str, LogSeverity req)
+        {
+            if(!LogSeverity.HasFlag(req)) return;
+            string prefix = req.ToString().ToUpper() + ": ";
+            string date = DateTime.Now + " | ";
+
+            OnLog.Invoke(date + prefix + str);
+        }
         // public event Action OnServerConnected = () => {};
         // public event Action<string> OnServerDisconnected = (reason) => {}; 
 
@@ -170,8 +195,6 @@ namespace Exaroton
         private StreamEventArgs<T> UpdateStreamValues<T>(string name, WebSocketMessage msg)
         {
             Streams[name].PreviousValue = Streams[name].CurrentValue;
-
-            //Console.WriteLine(msg.Data);
             
             if(name == StreamNames.ConsoleStream)
                 Streams[name].CurrentValue = msg.Data;
@@ -212,9 +235,12 @@ namespace Exaroton
 
         private void OnMessage(string str)
         {
+            if(LogSeverity.HasFlag(LogSeverity.Message)) Log(str, LogSeverity.Message);
+
             if(str == "" && !IsRunning)
             {
-                throw new Exception("Couldn't start websocket client. You are probably using wrong token/server id.");
+                Log("Couldn't start websocket client. You are probably using wrong token/server id.", LogSeverity.Error);
+                return;
             }
 
             var msg = JsonConvert.DeserializeObject<WebSocketMessage>(str, new JsonConverterObjectToString());
