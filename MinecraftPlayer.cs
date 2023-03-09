@@ -19,7 +19,7 @@ namespace Exaroton
 
             var server = Server();
             if(server is null) throw new Exception();
-            if(!server.PlayersList.Players.Contains(Name)) throw new Exception();
+            //if(!server.PlayersList.Players.Contains(Name)) throw new Exception();
 
             var value = await server.ExecuteDataCommandAsync<T>(command, wantedContent);
 

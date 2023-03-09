@@ -13,6 +13,7 @@ namespace Exaroton.Cast
     {
         internal static T ConvertData<T>(this string response)
         {
+            if(response == "") return default;
             //Console.WriteLine(response);
             var type = typeof(T);
             var args = response.Split("entity data: ");

@@ -158,10 +158,9 @@ namespace Exaroton
             
             await SendToStream(StreamType.Console, msg);
 
-            lastConsoleOutput = "";
-            while(!lastConsoleOutput.Contains(wantedContent) || lastConsoleOutput == "") await Task.Delay(2);
-
-            var l = lastConsoleOutput;
+            await WaitUntil(() => lastConsoleOutput.Contains(wantedContent) && lastConsoleOutput != "", 50, 1);
+            
+            var l = lastConsoleOutput.Contains(wantedContent) ? lastConsoleOutput : "";
             lastConsoleOutput = "";
             return l;
         }
@@ -272,9 +271,9 @@ namespace Exaroton
         }
 
         // Studying console output makes me think that all messages coming from Exaroton fit in this regex
-        Regex IsValidMessage = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[minecraft\/DedicatedServer\]: .*");
-        Regex IsUserSent = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[minecraft\/DedicatedServer\]: <.*>");
-        Regex IsAdminSent = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[minecraft\/DedicatedServer\]: \[.*\]");
+        Regex IsValidMessage = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[.*\]: .*");
+        Regex IsUserSent = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[.*\]: <.*>");
+        Regex IsAdminSent = new Regex(@"\[\d\d:\d\d:\d\d\] \[.*\] \[.*\]: \[.*\]");
 
         private bool IsConsoleResponseAuthentic(string response)
         {
